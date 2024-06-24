@@ -1,0 +1,29 @@
+#######################
+# Xpaste App Playbook #
+#######################
+---
+
+- name: "Xpaste Infrastructure installation and configuration"
+  hosts: "centos_hosts"
+  become: true
+  vars_files:
+#    - vars_encrypted.yml
+    - vars_unencrypted.yml
+  gather_facts: true
+
+  roles:
+    - postgresql
+    - xpaste-app
+    - nginx
+  
+  handlers:
+    - name: "Reload firewall"
+      ansible.builtin.command:
+        cmd: "firewall-cmd --reload"
+
+  tasks:
+    - name: "Run additional tasks"
+      include: additional_tasks.yml
+      when: ansible_os_family == "RedHat" and ansible_distribution == "CentOS" and ansible_distribution_major_version == "7"
+  
+...

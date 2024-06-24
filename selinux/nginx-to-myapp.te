@@ -1,0 +1,14 @@
+
+module nginx-to-myapp 1.0;
+
+require {
+	type httpd_t;
+	type initrc_t;
+	class unix_stream_socket connectto;
+}
+
+#============= httpd_t ==============
+
+#!!!! The file '/run/myapp/puma.sock' is mislabeled on your system.  
+#!!!! Fix with $ restorecon -R -v /run/myapp/puma.sock
+allow httpd_t initrc_t:unix_stream_socket connectto;

@@ -1,0 +1,101 @@
+#######################
+# Xpaste App Playbook #
+#######################
+---
+    - name: "Replace nginx config"
+      ansible.builtin.copy:
+        src: '{{ WORKINGDIRECTORY }}config/nginx.conf'
+        dest: /etc/nginx/nginx.conf
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0644'
+      when: ansible_os_family == "RedHat" and ansible_distribution == "CentOS" and ansible_distribution_major_version == "7"
+
+    - name: "Adjust nginx backend"
+      lineinfile: 
+        path: /etc/nginx/nginx.conf
+        state: present
+        regexp: '^(.*)unix:/var/run/puma.sock(.*)$' 
+        line: '\1unix:///var/run/{{ RUNTIMEDIR }}/puma.sock\2'
+        backrefs: yes
+      when: ansible_os_family == "RedHat" and ansible_distribution == "CentOS" and ansible_distribution_major_version == "7"
+
+    - name: "Reload nginx"
+      ansible.builtin.systemd:
+        name: nginx.service
+        state: restarted
+      when: ansible_os_family == "RedHat" and ansible_distribution == "CentOS" and ansible_distribution_major_version == "7"
+
+    - name: "Allow tcp/80 port"
+      ansible.posix.firewalld:
+        port: 80/tcp
+        permanent: true
+        state: enabled
+        zone: public
+      notify:
+        - "Reload firewall"
+      when: ansible_os_family == "RedHat" and ansible_distribution == "CentOS" and ansible_distribution_major_version == "7"
+
+#    - name: "Check if port tcp/80 allowed"
+#      ansible.builtin.shell:
+#       cmd: firewall-cmd --list-all | grep -i "ports" | grep "80/tcp"
+#      register: is_port_allowed
+#      failed_when: "is_port_allowed.rc == 2"
+#
+#    - name: "Allow port"
+#      ansible.builtin.command:
+#        cmd: "firewall-cmd --permanent --zone=public --add-port=80/tcp"
+#      when: is_port_allowed.stdout == ""
+#
+#    - name: "Reload firewall"
+#      ansible.builtin.command:
+#        cmd: "firewall-cmd --reload"
+#      when: is_port_allowed.stdout == ""
+
+    - name: "Set SELinux context for socket"
+      ansible.builtin.command:
+        cmd: "restorecon -R -v /run/{{ RUNTIMEDIR }}/puma.sock"
+      when: ansible_os_family == "RedHat" and ansible_distribution == "CentOS" and ansible_distribution_major_version == "7"
+
+#    - name: "Adjust Selinux policy"
+#      ansible.builtin.shell:
+#        cmd: "grep '/run/{{ RUNTIMEDIR }}/puma.sock' /var/log/audit/audit.log | audit2allow -M nginx-to-myapp"
+#        chdir: '{{ WORKINGDIRECTORY }}' 
+
+    - name: "Transfer selinux policy"
+      ansible.builtin.copy:
+        src: ./selinux/nginx-to-myapp.pp
+        dest: '{{ WORKINGDIRECTORY }}nginx-to-myapp.pp'
+        remote_src: false
+        owner: root
+        group: root
+        mode: '0644'
+      when: ansible_os_family == "RedHat" and ansible_distribution == "CentOS" and ansible_distribution_major_version == "7"
+
+    - name: "Transfer selinux policy"
+      ansible.builtin.copy:
+        src: ./selinux/nginx-to-myapp.te
+        dest: '{{ WORKINGDIRECTORY }}nginx-to-myapp.te'
+        remote_src: false
+        owner: root
+        group: root
+        mode: '0644'
+      when: ansible_os_family == "RedHat" and ansible_distribution == "CentOS" and ansible_distribution_major_version == "7"
+
+    - name: "Activate Selinux Policy"
+      ansible.builtin.command:
+        cmd: "semodule -i {{ WORKINGDIRECTORY }}nginx-to-myapp.pp"
+      when: ansible_os_family == "RedHat" and ansible_distribution == "CentOS" and ansible_distribution_major_version == "7"
+
+#  tasks:
+#    - name: "Print Facts"
+#      debug:
+#        msg: "{{ ansible_facts }}"
+#    - name: "Test task"
+#      ansible.builtin.command:
+#        cmd: "touch /tmp/test"
+#      when: ansible_os_family == "RedHat"
+#    - name: "Reload nginx"
+   
+...

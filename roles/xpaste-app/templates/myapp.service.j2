@@ -1,0 +1,24 @@
+[Unit]
+Description=MyApp RUBY application
+After=postgresql.service
+
+[Service]
+Type=simple
+Restart=always
+User={{ APP_USER }}
+WorkingDirectory={{ WORKINGDIRECTORY }}
+RuntimeDirectory={{ RUNTIMEDIR }}
+Environment=SECRET_KEY_BASE={{ SECRET_KEY_BASE }}
+Environment=RAILS_ENV={{ RAILS_ENV }}
+Environment=RAILS_LOG_TO_STDOUT={{ RAILS_LOG_TO_STDOUT }}
+Environment=DB_HOST={{ DB_HOST }}
+Environment=DB_PORT={{ DB_PORT }}
+Environment=DB_NAME={{ DB_NAME }}
+Environment=DB_USER={{ DB_USER }}
+Environment=DB_PASSWORD={{ DB_PASSWORD }}
+ExecStart=/bin/bash -lc 'bundle exec rake db:migrate && bundle exec puma -b {{ LISTEN_ON }} -e $RAILS_ENV config.ru'
+ExecStop=/bin/kill -s SIGINT $MAINPID
+
+[Install]
+WantedBy=multi-user.target
+

@@ -1,0 +1,6 @@
+---
+- name: "Install nginx via geerlingguy role"
+  include_role:
+    name: geerlingguy.nginx
+    tasks_from: main
+ 

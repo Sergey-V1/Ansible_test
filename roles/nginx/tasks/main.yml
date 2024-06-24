@@ -1,0 +1,5 @@
+- name: "CentOS 7 tasks"
+  include_tasks: "centos7.yml"
+  when: ansible_os_family == "RedHat" and ansible_distribution == "CentOS" and ansible_distribution_major_version == "7"
+
+

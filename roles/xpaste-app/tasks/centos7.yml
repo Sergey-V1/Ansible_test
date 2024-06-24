@@ -1,0 +1,160 @@
+---
+
+- name: "Install repo"
+  ansible.builtin.yum:
+    name:
+      - epel-release
+      - centos-release-scl-rh
+      - centos-release-scl
+    state: "present"
+    update_cache: true
+
+- name: "check and create app directory"
+  ansible.builtin.file:
+    path: '{{ WORKINGDIRECTORY }}'
+    state: directory
+    mode: '0755'
+    owner: '{{ APP_USER }}'
+    group: '{{ APP_USER }}'
+
+- name: "Install dependencies"
+  ansible.builtin.yum:
+    name:
+      - git
+      - gcc
+      - libxml2-devel
+      - libxslt
+      - libxslt-devel 
+#      - postgresql-devel-9.2.24
+#      - postgresql-server-9.2.24
+#      - postgresql-libs-9.2.24
+#      - postgresql-9.2.24 
+      - nodejs 
+    state: "present"
+    update_cache: true
+
+- name: "Create .ssh directory if it doesn't exist"
+  ansible.builtin.file:
+    path: ~/.ssh
+    state: directory
+    mode: '0740'
+    owner: '{{ APP_USER }}'
+    group: '{{ APP_USER }}'
+  become_user: '{{ APP_USER }}'
+
+- name: "Copy private key" 
+  ansible.builtin.copy:
+    src: '.ssh/{{ GIT_PRIVATE_SSH_KEY }}'
+    dest: '~/.ssh/{{ GIT_PRIVATE_SSH_KEY }}'
+    owner: '{{ APP_USER }}'
+    group: '{{ APP_USER }}'
+    mode: '0600'
+  become_user: '{{ APP_USER }}'
+
+- name: "Copy public key"
+  ansible.builtin.copy:
+    src: '.ssh/{{ GIT_PUBLIC_SSH_KEY }}'
+    dest: '~/.ssh/{{ GIT_PUBLIC_SSH_KEY }}'
+    owner: '{{ APP_USER }}'
+    group: '{{ APP_USER }}'
+    mode: '0644'
+  become_user: '{{ APP_USER }}'
+
+- name: "Copy known hosts"
+  ansible.builtin.copy:
+    src: '.ssh/{{ KNOWN_HOSTS_FILE }}'
+    dest: '~/.ssh/{{ KNOWN_HOSTS_FILE }}'
+    owner: '{{ APP_USER }}'
+    group: '{{ APP_USER }}'
+    mode: '0644'
+  become_user: '{{ APP_USER }}'
+
+- name: "Clone app repo"
+  ansible.builtin.git:
+    key_file: '~/.ssh/{{ GIT_PRIVATE_SSH_KEY }}' 
+    repo: git@gitlab.slurm.io:edu/xpaste_practicum.git
+    dest: '{{ WORKINGDIRECTORY }}'
+  become_user: ' {{ APP_USER }}'
+
+- name: "Clone rbenv repo"
+  ansible.builtin.git:
+    repo: https://github.com/rbenv/rbenv.git
+    dest: ~/.rbenv
+  become_user: ' {{ APP_USER }}'
+
+- name: "Clone rbenv-vars repo"
+  ansible.builtin.git:
+    repo: https://github.com/rbenv/rbenv-vars.git
+    dest: ~/.rbenv/plugins/rbenv-vars
+  become_user: ' {{ APP_USER }}'
+
+- name: "Clone ruby-build repo"
+  ansible.builtin.git:
+    repo:  https://github.com/rbenv/ruby-build.git
+    dest: ~/.rbenv/plugins/ruby-build
+  become_user: ' {{ APP_USER }}'
+
+- name: "Init rbenv"
+  ansible.builtin.lineinfile:
+    dest: ~/.bashrc
+    state: present
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  become_user: '{{ APP_USER }}'
+  with_items:
+    - { regexp: '^PATH.+rbenv', line: 'PATH="$HOME/.rbenv/bin:$PATH"' }
+    - { regexp: '^eval.+rbenv', line: 'eval "$(rbenv init -)"' }
+
+- name: "Install ruby"
+  ansible.builtin.command:
+    cmd: /bin/bash -lc "rbenv install {{ RUBY_VERSION }} --skip-existing"
+  become_user: '{{ APP_USER }}'
+  args:
+    chdir: ~
+
+- name: "Set ruby version for app"
+  ansible.builtin.command:
+    cmd: /bin/bash -lc "rbenv local {{ RUBY_VERSION }}"
+  become_user: '{{ APP_USER }}'
+  args:
+    chdir: '{{ WORKINGDIRECTORY }}'
+
+- name: "Install bundler"
+  ansible.builtin.command:
+    cmd: /bin/bash -lc "gem install bundler -v {{ BUNDLER_VERSION }}"
+  become_user: '{{ APP_USER }}'
+  args:
+    chdir: '{{ WORKINGDIRECTORY }}' 
+
+- name: "Config nokogiri"
+  ansible.builtin.command:
+    cmd: /bin/bash -lc "bundle config build.nokogiri --use-system-libraries"
+  become_user: '{{ APP_USER }}'
+  args:
+    chdir: '{{ WORKINGDIRECTORY }}'
+
+- name: "Install bundle"
+  ansible.builtin.command:
+    cmd: /bin/bash -lc "bundle install --clean --no-cache --without development"
+  become_user: '{{ APP_USER }}'
+  register: bundle_output
+  failed_when: "bundle_output.rc == 2"
+  args:
+    chdir: '{{ WORKINGDIRECTORY }}'
+
+- name: "Create systemd unit"
+  template:
+    src: templates/myapp.service.j2
+    dest: /etc/systemd/system/myapp.service
+
+- name: "Reload systemd daemon"
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: "Enable, unmask and start app service"
+  ansible.builtin.systemd:
+    name: myapp
+    enabled: true
+    state: started
+    masked: no
+

@@ -1,0 +1,6 @@
+roles:
+- src: geerlingguy.nginx
+
+collections:
+ - ansible.posix
+ 

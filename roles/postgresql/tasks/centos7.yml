@@ -1,0 +1,60 @@
+---
+- name: "Install repo"
+  ansible.builtin.yum:
+    name:
+      - epel-release
+      - centos-release-scl-rh
+      - centos-release-scl
+    state: "latest"
+    update_cache: true
+
+- name: "Install postgresql packages"
+  ansible.builtin.yum:
+    name:
+      - 'postgresql-devel-{{ POSTGRES_VERSION }}'
+      - 'postgresql-server-{{ POSTGRES_VERSION }}'
+      - 'postgresql-libs-{{ POSTGRES_VERSION }}'
+      - 'postgresql-{{ POSTGRES_VERSION }}'
+    state: "present"
+    update_cache: true
+
+- name: "Check if postgresql cluster is initialized"
+  ansible.builtin.stat:
+    path: "/var/lib/pgsql/data/postgresql.conf"
+  register: is_pg_initialized
+
+- name: "Initialize postgresql cluster"
+  ansible.builtin.command: "/usr/bin/initdb --locale={{ POSTGRES_LOCALE }} -D {{ POSTGRES_DATA_DIR }}"
+  become_user: postgres
+#    cmd: "/usr/bin/initdb --locale={{ POSTGRES_LOCALE }} -D {{ POSTGRES_DATA_DIR }}"
+  when: not is_pg_initialized.stat.exists
+
+- name: "Enable, unmask and start postgres"
+  ansible.builtin.systemd:
+    name: postgresql
+    enabled: true
+    state: started
+    masked: no
+
+- name: "Check if postgres user exists"
+  ansible.builtin.shell:
+   cmd: psql -U postgres -c "select 1 from pg_roles where rolname='{{ DB_USER }}';" | grep "(0 rows)"
+  register: is_pg_user_absent
+  failed_when: "is_pg_user_absent.rc == 2"
+
+- name: "Create postgres user"
+  ansible.builtin.command:
+    cmd: psql -U postgres -c "create user {{ DB_USER }} with password '{{ DB_PASSWORD }}';"
+  when: is_pg_user_absent.stdout != ""
+
+- name: "Check if postgres database exists"
+  ansible.builtin.shell:
+   cmd: psql -U postgres -c "select 1 from pg_database where datname='{{ DB_NAME }}';" | grep "(0 rows)"
+  register: is_pg_database_absent
+  failed_when: "is_pg_database_absent.rc == 2"
+
+- name: "Create postgres database"
+  ansible.builtin.command:
+    cmd: psql -U postgres -c "create database {{ DB_NAME }} with owner {{ DB_USER }};"
+  when: is_pg_database_absent.stdout != ""
+
