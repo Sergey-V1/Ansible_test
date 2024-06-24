@@ -1,0 +1,8 @@
+keys/ssh-key
+keys/ssh-key.pub
+sudopass_encrypted.yml
+vars_encrypted.yml
+roles/xpaste-app/files/.ssh/known_hosts
+roles/xpaste-app/files/.ssh/id_ed25519
+roles/xpaste-app/files/.ssh/id_ed25519.pub
+
